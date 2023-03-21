@@ -1,44 +1,27 @@
-FROM golang:1.15 as build
+ARG GO_VERSION=1.19
+FROM golang:${GO_VERSION}-alpine as builder
 
-# Create appuser.
-# See https://stackoverflow.com/a/55757473/12429735
-ENV USER=appuser
-ENV UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    "${USER}"
+RUN apk add --no-cache --update git && apk add build-base
 
-RUN apt-get update && apt-get install -y ca-certificates
-RUN go get github.com/rakyll/hey
+WORKDIR /build
+COPY ./go.mod ./go.sum ./
+RUN go mod download -x
 
-# Build
-WORKDIR /go/src/github.com/rakyll/hey
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o /go/bin/hey hey.go
+COPY ./ .
 
-###############################################################################
-# final stage
-FROM scratch
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /etc/group /etc/group
-USER appuser:appuser
+RUN CGO_ENABLED=0 GOOS=linux go build -o ./hey
 
-ARG APPLICATION="hey"
-ARG DESCRIPTION="HTTP load generator, ApacheBench (ab) replacement, formerly known as rakyll/boom"
-ARG PACKAGE="rakyll/hey"
 
-LABEL org.opencontainers.image.ref.name="${PACKAGE}" \
-    org.opencontainers.image.authors="Jaana Dogan <@rakyll>" \
-    org.opencontainers.image.documentation="https://github.com/${PACKAGE}/README.md" \
-    org.opencontainers.image.description="${DESCRIPTION}" \
-    org.opencontainers.image.licenses="Apache 2.0" \
-    org.opencontainers.image.source="https://github.com/${PACKAGE}"
+FROM alpine:3.17
 
-COPY --from=build /go/bin/${APPLICATION} /hey
-ENTRYPOINT ["/hey"]
+RUN adduser -u 1000 -h /app -D -g "" user  \
+    && chown -hR user: /app
+
+WORKDIR /hey
+
+ENV PATH=/hey:$PATH
+COPY --from=builder --chown=user:user /build/hey .
+
+USER user
+
+CMD ["./hey"]
