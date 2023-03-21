@@ -21,6 +21,8 @@ import (
 	"log"
 	"sort"
 	"time"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 const (
@@ -30,6 +32,13 @@ const (
 // We report for max 1M results.
 const maxRes = 1000000
 
+type RequestDetails struct {
+	Url        string
+	Method     string
+	StatusCode int
+	Duration   float64
+}
+
 type report struct {
 	avgTotal float64
 	fastest  float64
@@ -37,18 +46,19 @@ type report struct {
 	average  float64
 	rps      float64
 
-	avgConn     float64
-	avgDNS      float64
-	avgReq      float64
-	avgRes      float64
-	avgDelay    float64
-	connLats    []float64
-	dnsLats     []float64
-	reqLats     []float64
-	resLats     []float64
-	delayLats   []float64
-	offsets     []float64
-	statusCodes []int
+	avgConn         float64
+	avgDNS          float64
+	avgReq          float64
+	avgRes          float64
+	avgDelay        float64
+	connLats        []float64
+	dnsLats         []float64
+	reqLats         []float64
+	resLats         []float64
+	delayLats       []float64
+	offsets         []float64
+	statusCodes     []int
+	requestsDetails []RequestDetails
 
 	results chan *result
 	done    chan bool
@@ -85,6 +95,12 @@ func runReporter(r *report) {
 	// Loop will continue until channel is closed
 	for res := range r.results {
 		r.numRes++
+		requestDetail := RequestDetails{
+			Url:        res.url,
+			Method:     res.method,
+			StatusCode: res.statusCode,
+			Duration:   res.duration.Seconds(),
+		}
 		if res.err != nil {
 			r.errorDist[res.err.Error()]++
 		} else {
@@ -108,6 +124,7 @@ func runReporter(r *report) {
 				r.sizeTotal += res.contentLength
 			}
 		}
+		r.requestsDetails = append(r.requestsDetails, requestDetail)
 	}
 	// Signal reporter is done.
 	r.done <- true
@@ -140,28 +157,50 @@ func (r *report) printf(s string, v ...interface{}) {
 	fmt.Fprintf(r.w, s, v...)
 }
 
+func (r *report) renderDetailTable() string {
+	t := table.NewWriter()
+	t.SetAutoIndex(true)
+	t.AppendHeader(table.Row{
+		"Url",
+		"Method",
+		"Status_Code",
+		"Duration",
+	})
+	for _, requestDetail := range r.requestsDetails {
+		t.AppendRow(table.Row{
+			requestDetail.Url,
+			requestDetail.Method,
+			requestDetail.StatusCode,
+			requestDetail.Duration,
+		})
+		t.AppendSeparator()
+	}
+	return t.Render()
+}
+
 func (r *report) snapshot() Report {
 	snapshot := Report{
-		AvgTotal:    r.avgTotal,
-		Average:     r.average,
-		Rps:         r.rps,
-		SizeTotal:   r.sizeTotal,
-		AvgConn:     r.avgConn,
-		AvgDNS:      r.avgDNS,
-		AvgReq:      r.avgReq,
-		AvgRes:      r.avgRes,
-		AvgDelay:    r.avgDelay,
-		Total:       r.total,
-		ErrorDist:   r.errorDist,
-		NumRes:      r.numRes,
-		Lats:        make([]float64, len(r.lats)),
-		ConnLats:    make([]float64, len(r.lats)),
-		DnsLats:     make([]float64, len(r.lats)),
-		ReqLats:     make([]float64, len(r.lats)),
-		ResLats:     make([]float64, len(r.lats)),
-		DelayLats:   make([]float64, len(r.lats)),
-		Offsets:     make([]float64, len(r.lats)),
-		StatusCodes: make([]int, len(r.lats)),
+		RequestsDetails: r.renderDetailTable(),
+		AvgTotal:        r.avgTotal,
+		Average:         r.average,
+		Rps:             r.rps,
+		SizeTotal:       r.sizeTotal,
+		AvgConn:         r.avgConn,
+		AvgDNS:          r.avgDNS,
+		AvgReq:          r.avgReq,
+		AvgRes:          r.avgRes,
+		AvgDelay:        r.avgDelay,
+		Total:           r.total,
+		ErrorDist:       r.errorDist,
+		NumRes:          r.numRes,
+		Lats:            make([]float64, len(r.lats)),
+		ConnLats:        make([]float64, len(r.lats)),
+		DnsLats:         make([]float64, len(r.lats)),
+		ReqLats:         make([]float64, len(r.lats)),
+		ResLats:         make([]float64, len(r.lats)),
+		DelayLats:       make([]float64, len(r.lats)),
+		Offsets:         make([]float64, len(r.lats)),
+		StatusCodes:     make([]int, len(r.lats)),
 	}
 
 	if len(r.lats) == 0 {
@@ -290,14 +329,15 @@ type Report struct {
 	DelayMax float64
 	DelayMin float64
 
-	Lats        []float64
-	ConnLats    []float64
-	DnsLats     []float64
-	ReqLats     []float64
-	ResLats     []float64
-	DelayLats   []float64
-	Offsets     []float64
-	StatusCodes []int
+	Lats            []float64
+	ConnLats        []float64
+	DnsLats         []float64
+	ReqLats         []float64
+	ResLats         []float64
+	DelayLats       []float64
+	Offsets         []float64
+	StatusCodes     []int
+	RequestsDetails string
 
 	Total time.Duration
 
