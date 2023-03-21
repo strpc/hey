@@ -1,0 +1,27 @@
+{
+  "count": 100,
+  "concurrency": 10,
+  "timeout": 20,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://httpbin.org/get"
+    },
+    {
+      "method": "POST",
+      "url": "https://httpbin.org/post",
+      "host": "www.example.com",
+      "username": "user",
+      "password": "hackme",
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "cookies": {
+        "Session": "8ae1ea627da7b2b039729642c4c93059f95e8a9b"
+      },
+      "body": {
+        "foo": "bar"
+      }
+    }
+  ]
+}

@@ -18,7 +18,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/http"
 	gourl "net/url"
@@ -29,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rakyll/hey/requester"
+	"github.com/strpc/hey/requester"
 )
 
 const (
@@ -60,6 +59,7 @@ var (
 	h2   = flag.Bool("h2", false, "")
 	cpus = flag.Int("cpus", runtime.GOMAXPROCS(-1), "")
 
+	jsonConfigPath     = flag.String("json-config", "", "")
 	disableCompression = flag.Bool("disable-compression", false, "")
 	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
 	disableRedirects   = flag.Bool("disable-redirects", false, "")
@@ -95,6 +95,7 @@ Options:
 
   -host	HTTP Host header.
 
+  -json-config          Load config from json file. Count, concurrency, timeout and requests.
   -disable-compression  Disable compression.
   -disable-keepalive    Disable keep-alive, prevents re-use of TCP
                         connections between different HTTP requests.
@@ -112,11 +113,17 @@ func main() {
 	flag.Var(&hs, "H", "")
 
 	flag.Parse()
-	if flag.NArg() < 1 {
+	if *jsonConfigPath == "" && flag.NArg() < 1 {
 		usageAndExit("")
 	}
 
 	runtime.GOMAXPROCS(*cpus)
+
+	var cfg config
+	if *jsonConfigPath != "" {
+		cfg = parseJsonConfig(*jsonConfigPath)
+	}
+
 	num := *n
 	conc := *c
 	q := *q
@@ -137,7 +144,10 @@ func main() {
 		}
 	}
 
-	url := flag.Args()[0]
+	var url string
+	if *jsonConfigPath == "" {
+		url = flag.Args()[0]
+	}
 	method := strings.ToUpper(*m)
 
 	// set content-type
@@ -175,7 +185,7 @@ func main() {
 		bodyAll = []byte(*body)
 	}
 	if *bodyFile != "" {
-		slurp, err := ioutil.ReadFile(*bodyFile)
+		slurp, err := os.ReadFile(*bodyFile)
 		if err != nil {
 			errAndExit(err.Error())
 		}
@@ -221,19 +231,47 @@ func main() {
 
 	req.Header = header
 
-	w := &requester.Work{
-		Request:            req,
-		RequestBody:        bodyAll,
-		N:                  num,
-		C:                  conc,
-		QPS:                q,
-		Timeout:            *t,
-		DisableCompression: *disableCompression,
-		DisableKeepAlives:  *disableKeepAlives,
-		DisableRedirects:   *disableRedirects,
-		H2:                 *h2,
-		ProxyAddr:          proxyURL,
-		Output:             *output,
+	var w *requester.Work
+	if *jsonConfigPath != "" {
+		if cfg.Count != 0 {
+			num = cfg.Count
+		}
+		if cfg.Concurrency != 0 {
+			conc = cfg.Concurrency
+		}
+		if cfg.Timeout != 0 {
+			*t = cfg.Timeout
+		}
+
+		w = &requester.Work{
+			Request:            &http.Request{},
+			RequestFunc:        requestFactory(cfg),
+			N:                  num,
+			C:                  conc,
+			QPS:                q,
+			Timeout:            *t,
+			DisableCompression: *disableCompression,
+			DisableKeepAlives:  *disableKeepAlives,
+			DisableRedirects:   *disableRedirects,
+			H2:                 *h2,
+			ProxyAddr:          proxyURL,
+			Output:             *output,
+		}
+	} else {
+		w = &requester.Work{
+			Request:            req,
+			RequestBody:        bodyAll,
+			N:                  num,
+			C:                  conc,
+			QPS:                q,
+			Timeout:            *t,
+			DisableCompression: *disableCompression,
+			DisableKeepAlives:  *disableKeepAlives,
+			DisableRedirects:   *disableRedirects,
+			H2:                 *h2,
+			ProxyAddr:          proxyURL,
+			Output:             *output,
+		}
 	}
 	w.Init()
 
