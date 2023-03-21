@@ -11,14 +11,14 @@ To preserve the name for its original owner, we renamed this project to hey.
 
 ## Installation
 
-* Linux 64-bit: https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64
-* Mac 64-bit: https://hey-release.s3.us-east-2.amazonaws.com/hey_darwin_amd64
-* Windows 64-bit: https://hey-release.s3.us-east-2.amazonaws.com/hey_windows_amd64
-
-### Package Managers
-
-macOS:
--  [Homebrew](https://brew.sh/) users can use `brew install hey`.
+```shell
+go install github.com/strpc/hey
+```
+or  
+```shell
+docker build -t hey:latest github.com/strpc/hey
+docker run -v $PWD/config.json:/hey/config.json hey:latest hey -json-config config.json
+```
 
 ## Usage
 
@@ -54,7 +54,8 @@ Options:
   -h2 Enable HTTP/2.
 
   -host	HTTP Host header.
-
+    
+  -json-config          Load config from json file. Count, concurrency, timeout and requests.
   -disable-compression  Disable compression.
   -disable-keepalive    Disable keep-alive, prevents re-use of TCP
                         connections between different HTTP requests.
@@ -62,5 +63,7 @@ Options:
   -cpus                 Number of used cpu cores.
                         (default for current machine is 8 cores)
 ```
+
+[example json config(`-json-config`)](./json_config_example.json)
 
 Previously known as [github.com/rakyll/boom](https://github.com/rakyll/boom).
